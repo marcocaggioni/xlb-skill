@@ -1,0 +1,73 @@
+# Couette rheometer — XLB example case.
+# Same geometry and fluid as the M-Star and Palabos examples, so the
+# solvers can be compared point for point.
+# Everything here is a labelled default: confirm before running.
+
+geometry:
+  R_i: 0.020        # m, rotating inner cylinder (bob)
+  R_o: 0.025        # m, fixed outer cylinder (cup)
+  L: 0.060          # m, wetted length (3D torque = torque-per-length * L)
+  axis: Z
+  dimension: 2D     # default: 2D annulus cross-section, torque per unit length.
+                    # 3D is a follow-up; it adds end effects and ~100x cost.
+
+fluid:
+  model: newtonian   # default, validation case. Alternatives (commented):
+                     # - herschel_bulkley: yield_stress_Pa, K_Pa_s_n, n
+                     # - carreau: eta0_Pa_s, eta_inf_Pa_s, lambda_s, n
+  eta_Pa_s: 1.0
+  rho_kg_m3: 1000.0
+  # herschel_bulkley:
+  #   yield_stress_Pa: 5.0
+  #   K_Pa_s_n: 2.0
+  #   n: 0.5
+
+sweep:
+  shear_rate_1_s: [0.1, 0.3, 1, 3, 10, 30, 100]   # log-spaced
+  run_time_s: 1.0        # per point; viscous diffusion time gap^2/nu ~ 0.025 s
+  ramp_time_s: 0.2       # NOTE (XLB): not used as a time-varying ramp. The XLB
+                         # JAX backend bakes each wall velocity into the compiled
+                         # stepper, so a per-step ramp would recompile every step.
+                         # Instead the run is initialised with the analytic
+                         # Couette velocity profile (same purpose: no start-up
+                         # shock). See couette.py and RUN_REPORT.md.
+  steady_window_fraction: 0.2   # average torque over the last 20% of the run
+
+lattice:
+  cells_across_gap: 10   # default; dx = gap / 10 = 0.5 mm
+  omega: 1.0             # relaxation frequency; dt is solved from this (see lattice.py)
+  max_lattice_velocity: 0.1   # hard check: u_lb at the highest shear rate must stay below this
+  mpi_ranks: 1
+
+xlb:
+  backend: JAX           # CPU here. Warp/Neon backends need NVIDIA hardware.
+  precision: FP32FP32
+  wall_sectors: 32       # the rotating inner wall is split into this many
+                         # angular sectors, each a HalfwayBounceBackBC with
+                         # the constant wall velocity at the sector centre.
+                         # XLB's JAX BC takes one constant velocity per BC
+                         # object, so a spatially varying wall velocity has
+                         # to be piecewise-constant. Directional error per
+                         # sector <= half the sector angle (~0.5% at 32).
+  sample_every_steps: 100   # torque sampling interval (steps)
+  steps_per_point: 3000  # XLB-only override of sweep.run_time_s (24,000
+                         # steps). MEASURED (Nov 17): XLB 0.3.2's halfway
+                         # bounce-back leaks mass at a curved moving wall —
+                         # mean fluid density falls ~0.5% per 1,000 steps at
+                         # gamma = 10 1/s, ~5% per 1,000 steps at gamma = 100
+                         # (linear in wall speed; 128 sectors leak exactly
+                         # the same, so it is the staircase wall, not the
+                         # sectors). The velocity then inflates as 1/rho
+                         # (momentum is maintained by the wall), reaching
+                         # +13% over a 1 s run at gamma = 10, while the
+                         # momentum-exchange torque stays analytic. 3,000
+                         # steps is long past steady state (torque steady
+                         # from ~step 500, profile developed by ~step 500
+                         # from rest) and bounds the leak to ~1.5% of the
+                         # density at gamma = 10 and ~15% at gamma = 100,
+                         # where the torque still reads within ~1.5% of
+                         # analytic. See RUN_REPORT.md.
+  snapshot_every_steps: 250   # velocity-field snapshots for the video
+
+run:
+  dry_run: true   # default: lattice params only, no solver run
