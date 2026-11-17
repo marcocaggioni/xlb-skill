@@ -1,0 +1,102 @@
+# Couette rheometer — XLB three-component (TC) case.
+# Same geometry and sweep as the Newtonian example in examples/couette/,
+# so the solvers can be compared point for point — but the fluid is the
+# TC model fluid (Marco, Nov 17, voice), not Newtonian.
+# Everything here is a labelled default: confirm before running.
+
+geometry:
+  R_i: 0.020        # m, rotating inner cylinder (bob)
+  R_o: 0.025        # m, fixed outer cylinder (cup)
+  L: 0.060          # m, wetted length (3D torque = torque-per-length * L)
+  axis: Z
+  dimension: 2D     # 2D annulus cross-section, torque per unit length.
+                    # 3D is a follow-up; it adds end effects and ~100x cost.
+
+fluid:
+  model: tc   # three-component: tau = sigma_y + sigma_y*sqrt(gamma/gamma_c)
+              #                      + eta_bg*gamma
+  sigma_y_Pa: 70.0
+  gamma_dot_c_1_s: 100.0
+  eta_bg_Pa_s: 0.05        # 50 cP
+  rho_kg_m3: 1000.0
+  # REGULARIZATION (required): eta(gamma) = sigma_y/gamma
+  #   + sigma_y/sqrt(gamma*gamma_c) + eta_bg diverges as gamma -> 0, so
+  #   the viscosity is capped: eta = min(eta(gamma), eta_max) with
+  #   eta_max = eta(gamma_reg), gamma_reg = 1e-3 1/s.
+  #   eta_max = 70/1e-3 + 70/sqrt(1e-3*100) + 0.05 = 7.02214e4 Pa s
+  #   (computed from gamma_reg in lattice.py / tc_collision.py, not
+  #   hard-coded; the value below is for the record).
+  gamma_reg_1_s: 0.001
+  eta_max_Pa_s: 70221.4
+  #   The cap only bites where gamma < 1e-3 1/s, i.e. inside the
+  #   unyielded plug (gamma = 0 there analytically). The plug therefore
+  #   creeps at gamma ~ tau/eta_max ~ 1e-3 1/s instead of exactly 0 —
+  #   a <1% effect on Omega at the lowest sweep point (see RUN_REPORT.md).
+
+sweep:
+  shear_rate_1_s: [0.1, 0.3, 1, 3, 10, 30, 100]   # log-spaced; these are
+              # LABEL rates (Newtonian inner-wall-rate convention,
+              # Omega = gamma*(Ro^2-Ri^2)/(2*Ro^2)). The true inner-wall
+              # rate of the TC fluid exceeds the label rate (see
+              # RUN_REPORT.md) — validate on TORQUE, not on eta_app.
+  run_time_s: 1.0        # per point; NOT used directly (see xlb.steps_per_point)
+  ramp_time_s: 0.2       # NOTE (XLB): not used as a time-varying ramp. The XLB
+                         # JAX backend bakes each wall velocity into the compiled
+                         # stepper, so a per-step ramp would recompile every step.
+                         # Instead the run is initialised with the analytic
+                         # TC Couette velocity profile (same purpose: no
+                         # start-up shock). See couette.py and RUN_REPORT.md.
+  steady_window_fraction: 0.2   # average torque over the last 20% of the run
+
+lattice:
+  cells_across_gap: 10   # default; dx = gap / 10 = 0.5 mm
+  omega_ref: 1.0         # reference relaxation frequency; dt is solved
+                         # PER SWEEP POINT from eta at the label rate
+                         # (see lattice.py): dt = nu_lb_ref*dx^2/nu_label,
+                         # nu_lb_ref = (1/omega_ref - 0.5)/3 = 1/6.
+                         # The local omega then varies with the local
+                         # viscosity: omega_inner = 1.17-1.82 across the
+                         # sweep (inside [0.8, 1.9]); omega in the plug
+                         # falls to 0.02-0.00003 because eta there is the
+                         # cap 7.02e4 Pa s — that is the point of the plug
+                         # (near-solid), not an instability: the plug is
+                         # near-stationary and the runs are short. See
+                         # lattice.py / RUN_REPORT.md for the per-point table.
+  max_lattice_velocity: 0.1   # hard check: u_lb at the highest shear rate must stay below this
+  mpi_ranks: 1
+
+xlb:
+  backend: JAX           # CPU here. Warp/Neon backends need NVIDIA hardware.
+  precision: FP64FP64    # NOT FP32FP32: at gamma = 0.1 the lattice wall
+                         # speed is u_lb ~ 4e-8 (dt is set by eta = 722 Pa s),
+                         # below FP32's useful signal; FP64 keeps the
+                         # momentum-exchange torque (a small difference of
+                         # two large terms) accurate. XLB enables JAX x64
+                         # automatically for FP64 policies.
+  wall_sectors: 32       # the rotating inner wall is split into this many
+                         # angular sectors, each a HalfwayBounceBackBC with
+                         # the constant wall velocity at the sector centre.
+                         # XLB's JAX BC takes one constant velocity per BC
+                         # object, so a spatially varying wall velocity has
+                         # to be piecewise-constant. Directional error per
+                         # sector <= half the sector angle (~0.5% at 32).
+  sample_every_steps: 100   # torque sampling interval (steps)
+  steps_per_point: 3000  # XLB-only override of sweep.run_time_s. MEASURED
+                         # (Nov 17, Newtonian case): XLB 0.3.2's halfway
+                         # bounce-back leaks mass at a curved moving wall —
+                         # mean fluid density falls ~0.5% per 1,000 steps at
+                         # gamma = 10 1/s, ~5% per 1,000 steps at gamma = 100
+                         # (linear in wall speed; 128 sectors leak exactly
+                         # the same, so it is the staircase wall, not the
+                         # sectors). The velocity then inflates as 1/rho
+                         # (momentum is maintained by the wall), while the
+                         # momentum-exchange torque stays analytic. 3,000
+                         # steps is long past steady state (torque steady
+                         # from ~step 500 in the Newtonian case; here the
+                         # run starts from the analytic TC profile) and
+                         # bounds the leak. Density drift is reported per
+                         # point in flow_curve.csv / RUN_REPORT.md.
+  snapshot_every_steps: 250   # velocity-field snapshots for the video
+
+run:
+  dry_run: true   # default: lattice params only, no solver run
