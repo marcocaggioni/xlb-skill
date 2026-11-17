@@ -7,9 +7,9 @@ L = 0.060 m, shear rates 0.1 → 100 s⁻¹. The check is the analytic
 Couette torque: the simulated torque must match it, and the recovered
 apparent viscosity must come back ≈ 1.0 Pa·s.
 
-Written 2026-11-17. A copy of this file lives in every solver repo
-(`docs/comparison.md`); the numbers are the same everywhere.
-OpenLB was still running when this was written.
+Written 2026-11-17, updated the same day with the OpenLB run. A copy
+of this file lives in every solver repo (`docs/comparison.md`); the
+numbers are the same everywhere.
 
 ## Scoreboard
 
@@ -19,7 +19,7 @@ OpenLB was still running when this was written.
 | OpenFOAM | Finite-volume, GPL | **0.03%** | 1.0003 | ran, published |
 | XLB | LBM, Python/JAX | 1.16% | 0.988–1.000 | ran, published, with a caveat |
 | Palabos | LBM, C++/MPI, AGPLv3 | 1.43% | 1.0143 | ran, published |
-| OpenLB | LBM, C++/CUDA, GPLv2 | — | — | running |
+| OpenLB | LBM, C++/CUDA, GPLv2 | 0.94% | 1.0093 | ran, published |
 
 ## M-Star (Simcenter, Siemens) — the licensed reference
 
@@ -122,20 +122,49 @@ to install and the easiest to extend; GPU comes along with JAX.
 **Use it for:** fast prototyping and GPU experiments, not yet for
 numbers you would defend without the caveat.
 
-## OpenLB — still running
+## OpenLB — second-best validation, best open LBM number
 
 C++ with CUDA, GPLv2, the other big open LBM code. On paper the
 closest Palabos alternative, with more ready-made examples and
-more mature CUDA support. No numbers yet; the build is running in
-its own repo (`openlb-skill`) and the same validation gate applies.
+more mature CUDA support. Ran 2026-11-17 in its own repo
+(`openlb-skill`): 1.9r0, D2Q9/BGK, serial CPU, 10 cells across the
+gap, Bouzidi interpolated bounce-back moving wall (the aorta3d
+pattern) with the analytical circle as the wall position — so the
+inner wall is not a staircase, unlike Palabos.
+
+**Pros**
+- Validation passed at **0.94%** (η_app = 1.0093, constant across
+  the sweep — a systematic bias, so finer resolution should shrink
+  it). Sweep took 32.5 s on CPU.
+- Best open-LBM number in this test, and the only open LBM here
+  with an interpolated curved moving wall that holds up: no mass
+  leak was seen (unlike XLB), torque steady to 7 digits.
+- Ships a real Taylor–Couette example (`fsi/taylorCouette3d`) and
+  non-Newtonian patterns (`powerLaw2d`,
+  `nonNewtonianPoiseuille3d`).
+
+**Cons**
+- You still write the case, the moving wall, and the torque
+  extraction yourself — and the obvious first attempt
+  (`boundary::InterpolatedVelocity` on the solid disc) throws
+  "Could not set Boundary"; the Bouzidi route is the one that works.
+- No rheology menu: non-Newtonian means a local relaxation
+  frequency you implement.
+- 2D cross-section here; the shipped 3D Taylor–Couette example was
+  not used for v0.1.
+
+**Use it for:** open LBM work you want to publish or run anywhere
+without a license — the strongest open LBM candidate in this test
+so far.
 
 ## Bottom line
 
-- **Accuracy so far:** OpenFOAM (0.03%) > XLB (1.16%) ≈ Palabos
-  (1.43%), all three passing the 10% gate.
+- **Accuracy so far:** OpenFOAM (0.03%) > OpenLB (0.94%) > XLB (1.16%) ≈ Palabos
+  (1.43%), all four passing the 10% gate.
 - **Fastest to a real non-Newtonian curve:** OpenFOAM, because the
   models are built in.
-- **Best open LBM for publishing:** Palabos today; XLB once its
+- **Best open LBM for publishing:** OpenLB today (0.94%, interpolated
+  curved wall, no leak); Palabos close behind; XLB once its
   curved-wall boundary is fixed.
 - **Production mixing at work:** still M-Star — nothing open
   matches its validated tank/impeller/multiphase package.
@@ -149,4 +178,4 @@ its own repo (`openlb-skill`) and the same validation gate applies.
 - Palabos: github.com/marcocaggioni/palabos-skill
 - XLB: github.com/marcocaggioni/xlb-skill
 - OpenFOAM: github.com/marcocaggioni/openfoam-skill
-- OpenLB: github.com/marcocaggioni/openlb-skill (running)
+- OpenLB: github.com/marcocaggioni/openlb-skill (ran 2026-11-17)
