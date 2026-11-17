@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+examples/couette/runs/
+examples/couette/lattice.json
+examples/couette/flow_curve.csv
+examples/couette/flow_curve.png
