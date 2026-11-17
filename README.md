@@ -57,6 +57,28 @@ initialised with the analytic Couette profile instead of a
 time-varying ramp (the wall velocities are baked into the compiled
 stepper). Both are documented in `examples/couette/RUN_REPORT.md`.
 
+## Results — it ran
+
+<video src="https://raw.githubusercontent.com/marcocaggioni/xlb-skill/main/examples/couette/couette-sweep.mp4" controls></video>
+
+Steady state at each shear rate, γ̇ = 0.1 → 100 s⁻¹. The spin-up at γ̇ = 10 s⁻¹ is in [couette-gamma10.mp4](examples/couette/couette-gamma10.mp4).
+
+![Flow curve](examples/couette/flow_curve.png)
+
+Newtonian validation **PASSED**: max analytic-torque error **1.16%**, η_app = 0.988–1.000 Pa·s (true 1.0). Caveat, measured: the halfway bounce-back leaks mass at the curved moving wall, so runs are capped at 3,000 steps per point and the γ̇ = 100 velocity profile runs ~18% fast. Full numbers in [examples/couette/RUN_REPORT.md](examples/couette/RUN_REPORT.md).
+
+## How this compares
+
+Same Couette case, same validation, five solvers. Full write-up: [docs/comparison.md](docs/comparison.md).
+
+| Solver | Method | Repo | Validation (max error) | η_app | Sweep video |
+|---|---|---|---|---|---|
+| M-Star | LBM, GPU, licensed | [mstar-skill](https://github.com/marcocaggioni/mstar-skill) (private) | not yet run | — | — |
+| Palabos | LBM, C++/MPI, AGPLv3 | [palabos-skill](https://github.com/marcocaggioni/palabos-skill) | 1.43% | 1.0143 | [video](https://github.com/marcocaggioni/palabos-skill/blob/main/examples/couette/couette-sweep.mp4) |
+| XLB | LBM, Python/JAX | [xlb-skill](https://github.com/marcocaggioni/xlb-skill) | 1.16% | 0.988–1.000 | [video](https://github.com/marcocaggioni/xlb-skill/blob/main/examples/couette/couette-sweep.mp4) |
+| OpenFOAM | Finite-volume, GPL | [openfoam-skill](https://github.com/marcocaggioni/openfoam-skill) | 0.03% | 1.0003 | [video](https://github.com/marcocaggioni/openfoam-skill/blob/main/examples/couette/couette-sweep.mp4) |
+| OpenLB | LBM, C++/CUDA, GPLv2 | [openlb-skill](https://github.com/marcocaggioni/openlb-skill) | running | — | — |
+
 ## Status — v0.1
 
 - `lattice.py` and `couette_post.py`: **tested** (lattice check
