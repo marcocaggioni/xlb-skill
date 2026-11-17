@@ -1,0 +1,14 @@
+{
+  "dx_m": 0.0005000000000000001,
+  "dt_s": 4.166666666666668e-05,
+  "nu_lb": 0.16666666666666666,
+  "omega": 1.0,
+  "u_wall_max_m_s": 0.3600000000000001,
+  "u_lb_max": 0.03000000000000001,
+  "max_lattice_velocity": 0.1,
+  "mach_ok": true,
+  "n_steps": 24000,
+  "cells_across_gap": 10,
+  "gap_m": 0.005000000000000001,
+  "force_conversion_N_per_lb_force": 0.03600000000000001
+}
