@@ -7,7 +7,8 @@ L = 0.060 m, shear rates 0.1 → 100 s⁻¹. The check is the analytic
 Couette torque: the simulated torque must match it, and the recovered
 apparent viscosity must come back ≈ 1.0 Pa·s.
 
-Written 2026-11-17, updated the same day with the OpenLB run. A copy
+Written 2026-11-17; updated the same day with the OpenLB Newtonian run,
+and again with the three-component (TC) benchmark below. A copy
 of this file lives in every solver repo (`docs/comparison.md`); the
 numbers are the same everywhere.
 
@@ -20,6 +21,100 @@ numbers are the same everywhere.
 | XLB | LBM, Python/JAX | 1.16% | 0.988–1.000 | ran, published, with a caveat |
 | Palabos | LBM, C++/MPI, AGPLv3 | 1.43% | 1.0143 | ran, published |
 | OpenLB | LBM, C++/CUDA, GPLv2 | 0.94% | 1.0093 | ran, published |
+
+## Three-component (TC) model fluid — Couette benchmark (Nov 17, 2026)
+
+Same Couette case, Newtonian fluid replaced by Marco's TC model:
+σ = σ_y + σ_y√(γ̇/γ̇_c) + η_bg·γ̇, with σ_y = 70 Pa,
+γ̇_c = 100 1/s, η_bg = 0.05 Pa·s (50 cP), ρ = 1000 kg/m³. Same
+geometry (R_i = 0.020 m, R_o = 0.025 m, L = 0.060 m) and the same
+seven sweep labels γ̇ = 0.1 → 100 s⁻¹ (Ω set by the Newtonian
+inner-wall-rate convention, Ω = γ̇(R_o²−R_i²)/(2R_o²)).
+
+Validation is torque vs the analytic TC response: τ(r) = T/(2πLr²),
+the TC law inverted for γ̇(τ) (γ̇ = 0 where τ < σ_y), Ω = ∫γ̇ dr/r
+out to the yield radius R_y = min(R_o, √(T/2πLσ_y)), solved for T
+by bisection. The shared reference implementation (`tc-analytic.py`,
+one copy per repo) reproduces the known Newtonian analytic torque to
+0.0000%. Reference torques: 0.01167, 0.01218, 0.01304, 0.01423,
+0.01628, 0.01931, 0.02523 N·m. At γ̇ ≤ 10 there is a genuine
+unyielded plug attached to the outer wall (R_y = 21.0–24.8 mm); at
+30 and 100 the gap is fully yielded.
+
+Regularization (same everywhere): η(γ̇) = σ_y/γ̇ + σ_y/√(γ̇γ̇_c) +
+η_bg diverges at γ̇ → 0, so every solver caps it:
+η = min(η(γ̇), η_max), η_max = η(10⁻³ s⁻¹) = 70,221 Pa·s.
+
+### TC scoreboard
+
+| Solver | TC max error | Worst point | Status |
+|---|---|---|---|
+| M-Star | not run | — | case ready (Custom Fluid UDF), Marco to run at work |
+| OpenFOAM | **0.82%** | γ̇ = 0.1 (+0.82%) | ran, published |
+| OpenLB | **1.14%** | γ̇ = 0.1 (+1.14%) | ran, published |
+| Palabos | 3.80% | γ̇ = 0.1 (+3.80%) | ran, published |
+| XLB | 8.02% | γ̇ = 100 (−8.02%) | ran, published, marginal at γ̇ = 100 |
+
+### Per-solver TC notes
+
+- **OpenFOAM (0.82%)** — custom `threeComponent` viscosity model
+  (no built-in TC model exists; nothing substituted). All seven
+  errors +0.2–0.8%, largest at the lowest rate where the yielded
+  layer is thinnest (~8 cells). Sweep 75 s. γ̇ = 30/100 flagged
+  `converged: false` on the residual criterion, but the torque is
+  flat and 6000-iteration checks move those points toward analytic.
+- **OpenLB (1.14%)** — local-ω BGK via Π^neq, Bouzidi interpolated
+  curved wall, momentum-exchange torque. Errors +0.1–1.1%, sweep
+  ~75 s. No mass leak (density drift ≤ +0.34%). Best open-LBM TC
+  number — and the only open LBM here that also did the cavity and
+  the RBC test below.
+- **Palabos (3.80%)** — `TCBGKdynamics`, local ω via Π^neq,
+  fixed-point iterated like Palabos' own Carreau dynamics. Errors
+  all positive, falling with γ̇ — systematic staircase-wall bias,
+  worst where the yielded zone is thinnest (~2 cells at γ̇ = 0.1).
+  Sweep ~8 min.
+- **XLB (8.02%)** — custom BGK collision operator, local ω from
+  Π^neq. Passes the 10% gate but marginal at γ̇ = 100 (−8.02%),
+  where the halfway bounce-back mass leak (−10.7% density) breaks
+  the Newtonian self-compensation for a shear-thinning fluid.
+  Velocity profile also deviates near the yield surface while
+  torque stays accurate. Sweep 316 s.
+- **M-Star** — case prepared (`examples/couette-tc/`), not run. TC
+  is not a built-in rheology, but the public docs document a
+  Custom Fluid UDF (Kinematic Viscosity UDF, a local expression
+  evaluated at each lattice position each step) — the case is
+  prepared to use it. One gap: the exact shear-rate variable name
+  inside the UDF is not in the public docs and must be read off
+  Pre's Input Variables Panel on the licensed install.
+
+### Lid-driven cavity with the TC fluid (OpenLB, for the RTX 3090 video)
+
+2D square cavity, L = 0.100 m, U_lid = 1.0 m/s (characteristic rate
+10 1/s → τ ≈ 93 Pa at the lid, above the 70 Pa yield; quiet corners
+unyielded), N = 128 intervals per side, 455,325 steps, 1315 s on
+this VM's serial CPU (5.76 MLUPS). Newtonian Re = 100 check vs Ghia
+et al.: 2.84% PASSED. TC run converged (KE drift 0.00009%, plug
+38.7% of cells, density drift −0.25%): yielded lid layer, rotating
+unyielded plug at the vortex core, stagnant bottom plug. Video:
+`examples/cavity-tc/cavity-tc.mp4` in the OpenLB repo. RTX 3090
+estimate for the same run on `matteo` (WSL): ~10–60 s of solver
+time — an estimate, not a measurement (basis: 7.58e9 lattice
+updates; A5000 711/1077 MLUPS published; 3090 ballpark 700–1100
+MLUPS pure BGK, derated 300–700 for the TC path, plus a
+kernel-launch floor on 16.6k cells); one-time CUDA build 10–30 min
+not included. 3D not attempted (would cost ~100× at this resolution).
+
+### Immersed-boundary red blood cell (OpenLB, first test)
+
+OpenLB 1.9's shipped benchmark `fsi/deformableParticleInShearFlow3d`
+(Krüger, Varnik & Raabe 2011), copied unchanged: single spherical
+capsule in shear, 50³, Re = 0.02, G = 0.01, 9000 steps to κt = 120.
+Steady D/G = 7.019 vs analytic 6.25 (+12.3%), PASSED at the 15%
+gate (the shipped Δx = 1 run is itself ~+9% off analytic). Run
+359.6 s, 3.13 MLUPS. Scope, stated honestly: spherical capsule, not
+a biconcave RBC; Skalak membrane with no bending and no
+volume/area conservation. Suspension not attempted — the
+single-cell pass makes it a legitimate next step.
 
 ## M-Star (Simcenter, Siemens) — the licensed reference
 
@@ -161,16 +256,23 @@ so far.
 
 - **Accuracy so far:** OpenFOAM (0.03%) > OpenLB (0.94%) > XLB (1.16%) ≈ Palabos
   (1.43%), all four passing the 10% gate.
+- **TC accuracy:** OpenFOAM (0.82%) > OpenLB (1.14%) > Palabos
+  (3.80%) > XLB (8.02%), all four passing the 10% gate — and the
+  TC ranking matches the Newtonian one.
+- **Best open LBM for the TC fluid:** OpenLB (1.14%, interpolated
+  curved wall, no leak) — and it is also the only one with a TC
+  cavity video and a first RBC test.
 - **Fastest to a real non-Newtonian curve:** OpenFOAM, because the
   models are built in.
-- **Best open LBM for publishing:** OpenLB today (0.94%, interpolated
-  curved wall, no leak); Palabos close behind; XLB once its
-  curved-wall boundary is fixed.
+- **Torque is the robust observable** for a yield-stress fluid in
+  every LBM code here; velocity profiles near the yield surface are
+  not — a ~1% stress error maps to a 10–30% shear-rate error where
+  the TC law is flat near yield.
 - **Production mixing at work:** still M-Star — nothing open
   matches its validated tank/impeller/multiphase package.
-- **Next step:** run a Herschel–Bulkley or Carreau fluid through
-  the same Couette case in whichever solver you pick; that is
-  where the solvers will actually separate.
+- **Next steps:** finer resolution (the low-rate TC points are
+  resolution-limited everywhere); the M-Star TC run at work; the
+  RBC suspension; a 3D cavity if the 2D video earns it.
 
 ## Repos
 
