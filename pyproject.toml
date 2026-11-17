@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xlb-skill"
+version = "0.1.0"
+description = "Skill teaching an agent to run open-source XLB (JAX lattice Boltzmann) simulations from an English discussion — starting with a Couette rheometer flow curve."
+requires-python = ">=3.11"
+dependencies = [
+    "xlb[warp]",
+    "jax",
+    "numpy",
+    "matplotlib",
+    "pyyaml",
+]
+
+[tool.uv]
+package = false
+
+# NOTE: XLB is pip-installable (unlike Palabos), so `uv sync` installs the
+# whole solver stack: XLB itself, JAX (CPU build — this repo's runs use the
+# JAX backend), warp-lang (required at XLB import time even for the JAX
+# backend; the Warp/Neon compute backends themselves need NVIDIA hardware
+# and are NOT used here), plus numpy/matplotlib/pyyaml for the tooling.
+# No license, no C++ compiler, no separate library checkout.
