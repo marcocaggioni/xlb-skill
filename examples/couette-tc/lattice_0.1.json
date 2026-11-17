@@ -1,0 +1,23 @@
+{
+  "gamma_1_s": 0.1,
+  "dx_m": 0.0005000000000000001,
+  "dt_s": 5.769520583264476e-08,
+  "nu_lb_ref": 0.16666666666666666,
+  "omega_ref": 1.0,
+  "eta_label_Pa_s": 722.1859436211786,
+  "eta_inner_Pa_s": 70.42143547326901,
+  "gamma_inner_1_s": 1.0990017375706405,
+  "tau_inner_Pa": 77.39327994734138,
+  "torque_analytic_N_m": 0.011670631666549728,
+  "omega_inner": 1.8223043657410172,
+  "omega_plug": 0.02035944019342649,
+  "eta_max_Pa_s": 70221.40943621179,
+  "u_wall_m_s": 0.00036000000000000013,
+  "u_lb": 4.154054819950423e-08,
+  "max_lattice_velocity": 0.1,
+  "mach_ok": true,
+  "n_steps_1s": 17332463,
+  "cells_across_gap": 10,
+  "gap_m": 0.005000000000000001,
+  "force_conversion_N_per_lb_force": 18775.89133790444
+}
